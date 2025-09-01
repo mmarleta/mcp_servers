@@ -1,0 +1,163 @@
+# Optimus Project Architecture Policies
+
+services:
+  ai-engine:
+    allowed_db_access: false
+    allowed_migrations: false
+    allowed_llm: true
+    redis_db: 0
+    blocked_env_vars: ["DATABASE_URL", "POSTGRES_HOST", "POSTGRES_PORT", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB"]
+    blocked_imports: ["sqlalchemy", "asyncpg", "psycopg", "psycopg2", "psycopg_pool"]
+  backend-orchestrator:
+    allowed_db_access: false
+    allowed_migrations: false
+    allowed_llm: false
+    redis_db: 2
+    blocked_env_vars: ["DATABASE_URL", "POSTGRES_HOST", "POSTGRES_PORT", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB"]
+    blocked_imports: ["sqlalchemy", "asyncpg", "psycopg", "psycopg2", "psycopg_pool", "openai", "langchain"]
+  memory-engine:
+    allowed_db_access: true
+    allowed_migrations: true
+    allowed_llm: true  # OpenAI summarization for handover is allowed
+    redis_db: 1
+    blocked_env_vars: []
+    blocked_imports: []
+  rules-engine:
+    allowed_db_access: false   # As defined by the user policy
+    allowed_migrations: false
+    allowed_llm: false
+    redis_db: 3
+    blocked_env_vars: ["DATABASE_URL", "POSTGRES_HOST", "POSTGRES_PORT", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB"]
+    blocked_imports: ["sqlalchemy", "asyncpg", "psycopg", "psycopg2", "psycopg_pool"]
+  notification-worker:
+    allowed_db_access: false
+    allowed_migrations: false
+    allowed_llm: true
+    redis_db: 0
+    blocked_env_vars: ["DATABASE_URL", "POSTGRES_HOST", "POSTGRES_PORT", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB"]
+    blocked_imports: ["sqlalchemy", "asyncpg", "psycopg", "psycopg2", "psycopg_pool"]
+  proactive-worker:
+    allowed_db_access: false
+    allowed_migrations: false
+    allowed_llm: true
+    redis_db: 0
+    blocked_env_vars: ["DATABASE_URL", "POSTGRES_HOST", "POSTGRES_PORT", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB"]
+    blocked_imports: ["sqlalchemy", "asyncpg", "psycopg", "psycopg2", "psycopg_pool"]
+  document-embed-worker:
+    allowed_db_access: false
+    allowed_migrations: false
+    allowed_llm: true
+    redis_db: 0
+    blocked_env_vars: ["DATABASE_URL", "POSTGRES_HOST", "POSTGRES_PORT", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB"]
+    blocked_imports: ["sqlalchemy", "asyncpg", "psycopg", "psycopg2", "psycopg_pool"]
+
+migrations_allowed_services: ["memory-engine"]
+
+multi_tenant:
+  forbid_public_schema: true
+  tenant_schema_prefix: "t_"
+  # simple string checks used on SQL/DDL-like changes
+  forbidden_patterns:
+    - "CREATE SCHEMA public"
+    - "DROP SCHEMA public"
+    - "schema=\"public\""
+    - "schema='public'"
+    - ".schema('public')"
+
+compose_files:
+  - "docker-compose.hybrid.yml"
+  - "docker-compose.dev.yml"
+  - "docker-compose.prod.yml"
+  - "docker-compose*.yml"
+  - "docker-compose*.yaml"
+  - "infra-devops/docker-compose/*.yml"
+  - "infra-devops/docker-compose/*.yaml"
+
+docs_files:
+  - "SYSTEM_OVERVIEW.md"
+  - "README.md"
+
+search:
+  max_results: 100
+  default_glob: "**/*.{py,ts,js,md,yml,yaml,toml,sql}"
+
+validator:
+  # Simple regex patterns used across services
+  blocked_db_imports: ["sqlalchemy", "asyncpg", "psycopg", "psycopg2", "psycopg_pool"]
+  blocked_llm_imports_gateway: ["openai", "langchain"]
+  compose_blocked_env_for_services:
+    ai-engine: ["DATABASE_URL"]
+    backend-orchestrator: ["DATABASE_URL"]
+    rules-engine: ["DATABASE_URL"]
+    notification-worker: ["DATABASE_URL"]
+    proactive-worker: ["DATABASE_URL"]
+    document-embed-worker: ["DATABASE_URL"]
+  reserved_sqlalchemy_identifiers:
+    - "metadata"
+  sensitive_env_keys_for_fallback:
+    - "OPENAI_API_KEY"
+    - "OPENAI_BASE_URL"
+    - "GROQ_API_KEY"
+    - "GOOGLE_API_KEY"
+    - "DATABASE_URL"
+    - "POSTGRES_HOST"
+    - "POSTGRES_PORT"
+    - "POSTGRES_USER"
+    - "POSTGRES_PASSWORD"
+    - "POSTGRES_DB"
+    - "REDIS_URL"
+    - "REDIS_HOST"
+    - "REDIS_PORT"
+    - "JWT_SECRET"
+    - "SECRET_KEY"
+
+  # Guardrails for mock data usage and exception handling
+  mock_data_forbidden_terms:
+    - "use_mock"
+    - "mock"
+    - "fake"
+    - "placeholder"
+    - "stub"
+    - "dummy"
+    - "sample_data"
+  mock_data_allowed_path_substrings:
+    - "/tests/"
+    - "/test/"
+    - "/__tests__/"
+    - "/fixtures/"
+    - "/examples/"
+    - "/scripts/"
+    - "/migrations/"
+  forbid_literal_return_in_except: true
+
+  # Redis cache usage guardrails
+  redis_cache:
+    ttl_required_outside_db: true
+    redis_client_imports:
+      - "redis"
+      - "redis.asyncio"
+      - "aioredis"
+    invalidation_calls:
+      - "delete"
+      - "unlink"
+      - "expire"
+      - "publish"
+      - "cache_invalidate"
+    db_write_hints:
+      - "session.commit("
+      - "commit("
+      - "flush("
+      - "execute("
+      - "INSERT"
+      - "UPDATE"
+      - "DELETE"
+    disallowed_persistent_cmds_outside_db:
+      - "hset"
+      - "hmset"
+      - "zadd"
+      - "xadd"
+      - "lpush"
+      - "rpush"
+      - "sadd"
+    # Optional per-service key prefix. If not provided, default is "<service>:"
+    key_prefix_per_service: {}

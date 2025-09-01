@@ -1,0 +1,37 @@
+{
+  "name": "optimus-project-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for Optimus Project - Architecture guardrails and context indexing",
+  "main": "stdio_server.py",
+  "scripts": {
+    "start": "/root/optimus_final/.venv/bin/python /root/optimus_final/mcp_stdio_wrapper.py",
+    "test": "/root/optimus_final/.venv/bin/python -m pytest",
+    "validate": "/root/optimus_final/.venv/bin/python cli_validate_diff.py"
+  },
+  "mcp": {
+    "type": "stdio",
+    "command": "/root/optimus_final/.venv/bin/python",
+    "args": ["/root/optimus_final/mcp_stdio_wrapper.py"],
+    "env": {
+      "PYTHONPATH": "/root/optimus_final",
+      "MCP_INDEXER_ENABLED": "true",
+      "MCP_INDEXER_INTERVAL": "1.0"
+    }
+  },
+  "keywords": [
+    "mcp",
+    "optimus",
+    "architecture",
+    "guardrails",
+    "validation"
+  ],
+  "author": "Optimus Team",
+  "license": "MIT",
+  "dependencies": {
+    "mcp": "latest",
+    "fastmcp": "latest"
+  },
+  "devDependencies": {
+    "pytest": "latest"
+  }
+}

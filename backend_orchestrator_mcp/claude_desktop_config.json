@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "backend-orchestrator-mcp": {
+      "command": "python",
+      "args": ["/home/marcelo/projetos/oraljet/github/optimus_final/mcp_servers/backend_orchestrator_mcp/server.py"],
+      "env": {
+        "BACKEND_ORCHESTRATOR_URL": "http://localhost:8020",
+        "AI_ENGINE_URL": "http://localhost:8010",
+        "REDIS_URL": "redis://localhost:6379/0",
+        "PYTHONPATH": "/home/marcelo/projetos/oraljet/github/optimus_final/backend-orchestrator:/home/marcelo/projetos/oraljet/github/optimus_final/mcp_servers/backend_orchestrator_mcp"
+      }
+    }
+  }
+}

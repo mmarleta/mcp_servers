@@ -1,0 +1,90 @@
+prompts:
+  code_review:
+    |-
+      You are a rigorous code reviewer. Review the diff focusing on:
+      - Correctness and security
+      - Architecture guardrails and multi-tenancy
+      - Performance and readability
+      Provide a concise summary and high-impact suggestions only.
+
+  commit_message:
+    |-
+      Generate a conventional commits message for these changes.
+      - Type: {type}
+      - Scope: {scope}
+      - Include short subject and an optional detailed body.
+      - Reference issues if provided: {issues}
+
+  bug_triage:
+    |-
+      Help triage a bug report. Extract:
+      - Minimal repro steps
+      - Likely root cause
+      - Impact and severity
+      - Next actions
+
+  refactor_plan:
+    |-
+      Produce a minimal, safe refactor plan with small PR steps. Respect project guardrails.
+
+  coding_guardrails:
+    |-
+      Regras obrigatórias ao escrever código neste repositório (respeite SEMPRE, não simplifique para "fazer funcionar"):
+      - Multi‑tenant: nunca use o schema público. Nada de schema="public". Sempre usar schema do tenant (prefixo "t_").
+      - PostgreSQL: apenas o serviço memory-engine acessa DB e possui migrations (Alembic). Outros serviços consomem a API do memory-engine.
+      - LLM/AI libs: permitidas no ai-engine. Evite/usado como bloqueado no backend-orchestrator e rules-engine.
+      - Identificadores reservados SQLAlchemy: não use "metadata" como nome de atributo/arg/coluna/tabela; prefira "meta" (ou outro nome). "metadata" colide com MetaData.
+      - NÃO hardcode: chaves/segredos/URLs/ports. Não use fallback literal em os.getenv()/os.environ.get() (ex.: os.getenv("OPENAI_API_KEY", "abc")). Se ausente, falhe cedo com erro claro.
+      - Proibido usar dados mockados/fake/placeholder em runtime. Em caso de falhas persistentes (após retry exponencial) ou falta de ferramentas/dados, acione ai_initiated_handover. Exiba indisponibilidade com mensagem clara; nunca invente dados.
+      - Não reduzir funcionalidades: não remova parâmetros, fluxos ou validações existentes para simplificar. Preserve comportamento e cobertura.
+      - Análise de efeitos colaterais: mudanças fora do escopo devem ser evitadas. Se necessário, documente impacto e adicione testes.
+      - Migrations: apenas em memory-engine. Nenhuma criação de tabela no schema público.
+      - Configuração: use DI/arquivos/env sem defaults mágicos. Sem "or 'valor'" para segredos/senhas/URLs. Em exceções, NÃO retorne literais em except/catch; lance erro de domínio claro ou sinalize indisponibilidade.
+      Quando em dúvida: pare, explique as opções, peça confirmação.
+
+  review_guardrails_checklist:
+    |-
+      Checklist rápido antes de finalizar alterações:
+      - [ ] Multi-tenant OK (nenhuma referência a schema público; usa schemas de tenant "t_*")
+      - [ ] Respeita limites por serviço (DB só no memory-engine; LLM só no ai-engine)
+      - [ ] Sem uso de identificador "metadata" (usar "meta"), nem Column("metadata")
+      - [ ] Sem hardcoded/segredos/URLs/ports; sem fallback literal em getenv/environ.get
+      - [ ] Sem DADOS MOCKADOS/FAKE/PLACEHOLDER em runtime; em falhas após retry exponencial, IA aciona handover; indisponibilidade comunicada claramente
+      - [ ] Sem perda de funcionalidades; contratos preservados; testes/validações mantidos
+      - [ ] Sem alterações com efeitos colaterais não analisados/documentados
+      - [ ] Tratamento de exceções: sem return literal em except/catch; usar erro de domínio e logs úteis
+      - [ ] Migrations somente em memory-engine
+      - [ ] Config sem defaults mágicos; falha clara se variável obrigatória não definida
+
+  handover_playbook:
+    |-
+      PLAYBOOK DE HANDOVER (AI → Humano)
+
+      Objetivo: Nunca usar dados mockados em runtime. Se a IA ficar bloqueada (falta de ferramenta/dado, erro externo persistente mesmo após retry exponencial, ou complexidade fora de escopo), acione handover com comunicação clara.
+
+      1) Estados do atendimento
+      - NORMAL: IA responde normalmente
+      - HANDOVER_PENDING: IA iniciou transferência, informa que um atendente virá, mas ainda responde enquanto aguarda
+      - AI_BLOCKED: Operador assumiu (human-take). IA para completamente
+
+      2) Transições
+      - NORMAL → HANDOVER_PENDING: AI iniciou handover (ai_initiated_handover)
+      - HANDOVER_PENDING → AI_BLOCKED: operador assumiu (human-take)
+      - HANDOVER_PENDING → NORMAL: operador devolveu (human-return) OU timeout sem takeover (ex.: 10 mensagens)
+      - AI_BLOCKED → NORMAL: human-return
+
+      3) Regras de decisão
+      - Usuário pedir transferência NÃO significa handover automático. A IA primeiro tenta resolver.
+      - A IA aciona handover quando: não consegue resolver, não tem ferramentas/dados, detecta erro persistente em sistemas externos, ou complexidade além da capacidade.
+      - Em falha de sistema (ex.: dashboard fora), informe indisponibilidade de forma amigável e logue/erre claramente; nunca invente nem mostre dados mockados.
+
+      4) Pontos de implementação
+      - Backend Orchestrator: detectar/gerenciar estado HANDOVER_PENDING; passar meta={"handover_pending": true} para o AI Engine.
+      - AI Engine: adaptar prompt quando meta.handover_pending=true para comunicar educação/espera/limites.
+      - Contador/Reset automático: usar Redis com TTL para voltar a NORMAL se não houver takeover (ex.: 10 mensagens).
+      - Resumo no retorno: quando human-return, resumir o que ocorreu com o atendente (pontos principais, decisões, datas/horários) e injetar no contexto para a IA continuar corretamente.
+
+      5) Boas práticas de falha
+      - Retry exponencial com limites; se persistir, acionar handover.
+      - Não retornar literais em except/catch para "esconder" falha. Lance erro de domínio e emita logs. Forneça mensagem de indisponibilidade amigável.
+      - Proibido dados mockados/fake/placeholder no runtime. Somente em testes/fixtures.
