@@ -86,3 +86,57 @@ class AutoIndexer:
                 yield str((repo / spec).resolve())
         for rel in (pol.get("docs_files") or []):
             yield str((repo / rel).resolve())
+            
+        # 🚀 AUTO-REFRESH ENHANCEMENT: Monitor code files for search functionality
+        # This ensures that search results stay up-to-date when code changes
+        code_patterns = [
+            "**/*.py",      # Python files
+            "**/*.js",      # JavaScript files
+            "**/*.ts",      # TypeScript files
+            "**/*.md",      # Markdown files
+            "**/*.yml",     # YAML files
+            "**/*.yaml",    # YAML files
+            "**/*.json",    # JSON files
+        ]
+        
+        # Monitor key directories that users frequently search
+        key_directories = [
+            "ai-engine/src",
+            "backend-orchestrator/src", 
+            "frontend/static",
+            "memory-engine/src",
+            "rules-engine/src",
+            "whatsapp-integration/src"
+        ]
+        
+        for directory in key_directories:
+            dir_path = repo / directory
+            if dir_path.exists():
+                for pattern in code_patterns:
+                    try:
+                        for p in dir_path.glob(pattern):
+                            if p.is_file() and not self._should_ignore_file(p):
+                                yield str(p.resolve())
+                    except (OSError, ValueError):
+                        # Skip if glob pattern fails
+                        continue
+    
+    def _should_ignore_file(self, path: Path) -> bool:
+        """Ignore files that shouldn't trigger refresh (performance optimization)"""
+        ignore_patterns = [
+            ".git/",
+            "node_modules/", 
+            "__pycache__/",
+            ".pytest_cache/",
+            ".mypy_cache/",
+            "venv/",
+            ".venv/",
+            "build/",
+            "dist/",
+            ".log",
+            ".pyc",
+            ".pyo"
+        ]
+        
+        path_str = str(path)
+        return any(pattern in path_str for pattern in ignore_patterns)

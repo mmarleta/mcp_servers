@@ -66,9 +66,38 @@ def iter_files_by_glob(glob_pattern: str) -> Iterable[Path]:
 
 
 def text_search(query: str, glob_pattern: str, max_results: int = 100) -> List[Dict]:
+    import re
+    
     query_lower = query.lower()
     results: List[Dict] = []
     seen: set[str] = set()
+    
+    # Enhanced search logic: Support multiple search strategies
+    search_strategies = []
+    
+    # Strategy 1: Exact match (original behavior)
+    search_strategies.append(('exact', lambda text: query_lower in text.lower()))
+    
+    # Strategy 2: Multiple words (AND logic) - for "TenantPages loadConversations"
+    if ' ' in query_lower:
+        words = [w.strip() for w in query_lower.split() if w.strip()]
+        if len(words) > 1:
+            def multi_word_search(text):
+                text_lower = text.lower()
+                return all(word in text_lower for word in words)
+            search_strategies.append(('multi_word', multi_word_search))
+    
+    # Strategy 3: Regex pattern for "TenantPages.*loadConversations"
+    if ' ' in query and len(query.split()) == 2:
+        word1, word2 = query.split()
+        regex_pattern = rf'\b{re.escape(word1)}.*?{re.escape(word2)}\b'
+        def regex_search(text):
+            try:
+                return bool(re.search(regex_pattern, text, re.IGNORECASE | re.DOTALL))
+            except:
+                return False
+        search_strategies.append(('regex', regex_search))
+    
     for path in iter_files_by_glob(glob_pattern):
         if len(results) >= max_results:
             break
@@ -81,20 +110,52 @@ def text_search(query: str, glob_pattern: str, max_results: int = 100) -> List[D
             text = path.read_text(encoding="utf-8", errors="ignore")
         except Exception:
             continue
-        if query_lower in text.lower():
+            
+        # Try each search strategy
+        match_found = False
+        matched_strategy = None
+        match_position = -1
+        
+        for strategy_name, strategy_func in search_strategies:
+            if strategy_func(text):
+                match_found = True
+                matched_strategy = strategy_name
+                
+                # Find position for snippet
+                if strategy_name == 'exact':
+                    match_position = text.lower().find(query_lower)
+                elif strategy_name == 'multi_word':
+                    # Find position of first word
+                    words = [w.strip() for w in query_lower.split() if w.strip()]
+                    match_position = text.lower().find(words[0]) if words else 0
+                elif strategy_name == 'regex':
+                    try:
+                        match = re.search(rf'\b{re.escape(query.split()[0])}', text, re.IGNORECASE)
+                        match_position = match.start() if match else 0
+                    except:
+                        match_position = 0
+                break
+        
+        if match_found:
             rel = str(path.relative_to(get_repo_root()))
             if rel in seen:
                 continue
-            # capture first occurrence snippet
-            idx = text.lower().find(query_lower)
-            start = max(0, idx - 160)
-            end = min(len(text), idx + 160)
+                
+            # Capture snippet around match
+            if match_position >= 0:
+                start = max(0, match_position - 160)
+                end = min(len(text), match_position + 160)
+            else:
+                start, end = 0, min(320, len(text))
+                
             snippet = text[start:end]
             results.append({
                 "path": rel,
                 "snippet": snippet,
+                "match_strategy": matched_strategy
             })
             seen.add(rel)
+    
     return results
 
 
